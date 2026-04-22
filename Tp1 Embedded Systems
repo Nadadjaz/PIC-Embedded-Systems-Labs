@@ -1,1 +1,56 @@
 
+// ============================================
+// TP1 — Embedded Systems
+// PIC LED Blink using Software Loop & TMR0
+// Platform: PIC16F84A — CCS C Compiler
+// Author: Nada Djazari — University of Jijel
+// ============================================
+
+#include <16F84A.h>
+#fuses XT, NOWDT, NOPROTECT
+#use delay(clock=4000000) // 4 MHz oscillator
+
+// ── PART 1: Software delay blink ──
+// T = 1+1+(255+1)+(255*2)+1+1+(255+1)+(255*2)+2+1 = 1541us ≈ 1.54ms
+
+void blink_software() {
+// LED connected to RB0
+output_high(PIN_B0);
+delay_us(771);   // ~half period HIGH
+output_low(PIN_B0);
+delay_us(771);   // ~half period LOW
+}
+
+// ── PART 2: TMR0 overflow blink ──
+// Prescaler = 111 → 256
+// OVT = 4 * (1/4MHz) * 256 * (256-0) = 65.5ms
+// LED blinks every 200 overflows = 200 * 65.5ms = 13.1s
+
+int overflow_count = 0;
+
+#INT_TIMER0
+void timer0_isr() {
+overflow_count++;
+if (overflow_count >= 200) {
+output_toggle(PIN_B0); // Toggle LED every 200 overflows
+overflow_count = 0;
+}
+}
+
+// ── PART 2b: Faster TMR0 ──
+// Prescaler = 010 → 8
+// OVT = 4 * (1/4MHz) * 8 * (256-0) = 2048us ≈ 2.05ms
+
+void main() {
+set_tris_b(0x00);       // PORTB all outputs
+output_b(0x00);         // All LEDs off
+
+// Configure TMR0
+setup_timer_0(RTCC_INTERNAL | RTCC_DIV_256); // Prescaler 256
+enable_interrupts(INT_TIMER0);
+enable_interrupts(GLOBAL);
+
+while (TRUE) {
+// Main loop — LED controlled by ISR
+}
+}
