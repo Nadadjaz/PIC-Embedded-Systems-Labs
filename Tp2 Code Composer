@@ -1,1 +1,133 @@
+// ============================================
+// TP2 — Code Composer Studio
+// PIC16F84A: LED blink, 7-Seg counter, TMR0
+// Platform: PIC16F84A — CCS C Compiler
+// Author: Nada Djazari — University of Jijel
+// ============================================
 
+#include <16F84A.h>
+#fuses HS, NOWDT, NOPROTECT
+#use delay(clock=4000000) // 4 MHz oscillator
+
+// ── PART 1: Simple LED blink ──
+void part1_blink() {
+set_tris_b(0x00);  // PORTB all outputs
+while (TRUE) {
+output_high(PIN_B0);
+delay_ms(500);
+output_low(PIN_B0);
+delay_ms(500);
+}
+}
+
+// ── PART 2: Sequential LED pattern ──
+// Original: LED1..LED8 one by one
+// Modified: symmetric pairs
+// 0x81 = LED1+LED8 | 0x42 = LED2+LED7 | 0x24 = LED3+LED6 | 0x18 = LED4+LED5
+
+void part2_led_sequence() {
+int patterns[4] = {0x81, 0x42, 0x24, 0x18};
+int i;
+set_tris_b(0x00);
+while (TRUE) {
+for (i = 0; i < 4; i++) {
+output_b(patterns[i]);
+delay_ms(1000);
+}
+}
+}
+
+// ── PART 3: 7-Segment counter 00 to 99 ──
+// Segments connected to PORTB, units on PORTA
+
+int seg_table[10] = {
+0x3F, // 0
+0x06, // 1
+0x5B, // 2
+0x4F, // 3
+0x66, // 4
+0x6D, // 5
+0x7D, // 6
+0x07, // 7
+0x7F, // 8
+0x6F  // 9
+};
+
+void part3_counter() {
+int tens, units;
+set_tris_a(0x00);
+set_tris_b(0x00);
+while (TRUE) {
+for (tens = 0; tens <= 9; tens++) {
+for (units = 0; units <= 9; units++) {
+output_a(seg_table[tens]);  // Tens digit
+output_b(seg_table[units]); // Units digit
+delay_ms(1000);
+}
+}
+}
+}
+
+// ── PART 3.1: Counter with S1 (increment) / S2 (decrement) ──
+
+int count = 0;
+
+void part3_1_buttons() {
+int s1 = PIN_A0; // Increment button
+int s2 = PIN_A1; // Decrement button
+set_tris_a(0xFF); // PORTA inputs
+set_tris_b(0x00); // PORTB outputs
+
+while (TRUE) {
+if (!input(s1)) {           // S1 pressed
+delay_ms(20);            // Debounce
+if (!input(s1)) {
+if (count < 99) count++;
+while (!input(s1));   // Wait for release
+}
+}
+if (!input(s2)) {           // S2 pressed
+delay_ms(20);
+if (!input(s2)) {
+if (count > 0) count–;
+while (!input(s2));
+}
+}
+// Display count
+output_a(seg_table[count / 10]);
+output_b(seg_table[count % 10]);
+}
+}
+
+// ── PART 4: TMR0 interrupt — LED blink 500ms ──
+// Oscillator: HS 4MHz
+// T_overflow = (1/4) * 4 * 256 * (256-61) = 49920us ≈ 50ms
+// 500ms / 50ms = 10 interrupts needed
+
+int tmr_count = 0;
+
+#INT_TIMER0
+void timer0_isr() {
+set_timer0(61); // Reload: 256-195=61
+tmr_count++;
+if (tmr_count >= 10) {
+output_toggle(PIN_B0); // Toggle every 500ms
+tmr_count = 0;
+}
+}
+
+void main() {
+set_tris_b(0x00);
+output_b(0x00);
+
+// TMR0: internal clock, prescaler 256, HS oscillator
+setup_timer_0(RTCC_INTERNAL | RTCC_DIV_256);
+set_timer0(61);
+
+enable_interrupts(INT_TIMER0);
+enable_interrupts(GLOBAL);
+
+while (TRUE) {
+// LED controlled by timer interrupt
+}
+}
