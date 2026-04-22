@@ -1,1 +1,72 @@
+// ============================================
+// TP3 — Watchdog Timer (WDT) & Interrupts
+// Platform: PIC16F84A — CCS C Compiler
+// Author: Nada Djazari — University of Jijel
+// ============================================
+//
+// HOW IT WORKS:
+//   - On power-up: LED on RB7 lights for 2 seconds
+//   - Then: LED on RB6 blinks continuously
+//   - If button on RB0 is pressed: simulates a program crash
+//     (infinite loop) → LED stops blinking
+//   - WDT detects the freeze and resets the PIC
+//   - After reset: RB7 lights again for 2 seconds → proof of reset
+//
+// WDT TIMING:
+//   Default overflow ≈ 18ms
+//   Modified: WDT = 576ms = 18ms × 32 (prescaler = 32)
+// ============================================
 
+#include <16F84A.h>
+#fuses XT, WDT, NOPROTECT   // Enable WDT in fuses
+#use delay(clock=4000000, RESTART_WDT) // Auto-reset WDT inside delay functions
+
+// ── Pin definitions ──
+#define LED_STARTUP  PIN_B7  // LED on RB7 — lights on startup/reset
+#define LED_BLINK    PIN_B6  // LED on RB6 — blinks during normal operation
+#define BUTTON       PIN_B0  // Button on RB0 — simulates crash (infinite loop)
+
+void main() {
+
+// Configure PORTB
+set_tris_b(0x01); // RB0 = input (button), rest = output
+output_b(0x00);   // All LEDs off
+
+// ── Configure Watchdog Timer ──
+// Default: ~18ms overflow
+// Modified to 576ms: 18ms × 32 = setup_wdt(WDT_32MS) with prescaler 32
+setup_wdt(WDT_576MS); // 576 = 18 × 32 — prescaler set to 32
+
+// ── Startup indicator ──
+// Light RB7 for 2 seconds on every power-up or WDT reset
+output_high(LED_STARTUP);
+delay_ms(2000);          // RESTART_WDT in #use delay handles WDT reset here
+output_low(LED_STARTUP);
+
+// ── Main loop: blink RB6 ──
+while (TRUE) {
+
+```
+  // Check if button is pressed → simulate crash
+  if (input(BUTTON)) {
+     // Infinite loop = program "crashed"
+     // WDT will NOT be reset → overflow → PIC resets
+     // This materializes as: RB6 stops blinking, then RB7 lights again
+     while (TRUE) {
+        // Intentional infinite loop — do NOT call restart_wdt() here
+        // WDT times out after 576ms and resets the system
+     }
+  }
+
+  // Normal operation: blink LED on RB6
+  output_high(LED_BLINK);
+  delay_ms(250);          // delay_ms auto-resets WDT (RESTART_WDT active)
+  output_low(LED_BLINK);
+  delay_ms(250);
+
+  // Manual WDT reset (good practice between delays)
+  restart_wdt();
+```
+
+}
+}
