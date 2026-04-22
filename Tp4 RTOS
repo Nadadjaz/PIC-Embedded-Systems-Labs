@@ -1,1 +1,86 @@
+// ============================================
+// TP4 — RTOS (Real-Time Operating System)
+// Multi-task LED blink + ADC + RS232
+// Platform: PIC — CCS C Compiler
+// Author: Nada Djazari — University of Jijel
+// ============================================
 
+#include <16F877A.h>
+#fuses HS, NOWDT, NOPROTECT
+#use delay(clock=10000000)        // 10 MHz
+#use rs232(baud=2400, xmit=PIN_C6, rcv=PIN_C7)
+#use rtos(timer=0, minor_cycle=10ms)
+
+// ── Semaphore for ADC/RS232 synchronization ──
+int sem = 1;
+
+// ── Global voltage variable ──
+long Volts = 0;
+
+// ── PART 1: Four LED tasks ──
+
+#task(rate=250ms, max=50ms)
+void task_B0() {
+output_toggle(PIN_B0); // Blink LED on RB0 every 250ms
+}
+
+#task(rate=500ms, max=50ms)
+void task_B1() {
+output_toggle(PIN_B1); // Blink LED on RB1 every 500ms
+}
+
+#task(rate=1000ms, max=50ms)
+void task_B2() {
+output_toggle(PIN_B2); // Blink LED on RB2 every 1 second
+}
+
+#task(rate=2000ms, max=50ms)
+void task_B3() {
+output_toggle(PIN_B3); // Blink LED on RB3 every 2 seconds
+}
+
+// ── PART 2: Voltage measurement system ──
+
+// Task: Live indicator — blinks RD7 every 200ms
+#task(rate=200ms, max=50ms)
+void Live() {
+output_toggle(PIN_D7);
+}
+
+// Task: Read ADC voltage every 2 seconds
+#task(rate=2000ms, max=100ms)
+void Get_voltage() {
+rtos_wait(sem);                          // Wait for semaphore
+long raw = read_adc();                   // Read channel 0 (AN0/RA0)
+Volts = (long)(raw * 5000) / 1024;       // Convert to millivolts
+// 10-bit ADC: 1024 levels, Vref=5V → each level = 5000/1024 mV
+rtos_signal(sem);                        // Release semaphore
+}
+
+// Task: Send voltage to PC via RS232 every 1 second
+#task(rate=1000ms, max=100ms)
+void To_RS232() {
+rtos_wait(sem);                          // Wait — ensure fresh data
+printf(“Voltage: %Ldmv\r\n”, Volts);    // Send to PC
+rtos_signal(sem);                        // Signal done
+}
+
+void main() {
+// Configure PORTB as output (Part 1)
+set_tris_b(0x00);
+output_b(0x00);
+
+// Configure PORTD as output (Part 2)
+set_tris_d(0x00);
+output_d(0x00);
+
+// Configure PORTA as input — RA0 = analog input
+set_tris_a(0xFF);
+
+// Configure ADC — 10 bits, channel 0, internal clock
+setup_adc_ports(AN0);
+setup_adc(ADC_CLOCK_INTERNAL);
+set_adc_channel(0);
+
+rtos_run(); // Start RTOS — never returns
+}
